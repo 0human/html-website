@@ -1,0 +1,197 @@
+# .github/workflows/deploy-multiple-branches.yml
+name: Deploy Multiple Branches and Tags
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine deployment path
+        id: set-path
+        run: |
+          # 获取当前提交的short hash
+          COMMIT_HASH="${{ github.sha }}"
+          SHORT_COMMIT_HASH="${COMMIT_HASH:0:7}"
+          
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # 标签部署到 versions/ 目录
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            echo "DEPLOY_PATH=versions/$TAG_NAME" >> $GITHUB_ENV
+            echo "SOURCE_REF=$TAG_NAME ($SHORT_COMMIT_HASH)" >> $GITHUB_ENV
+          else
+            # 分支部署到 branches/ 目录
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            echo "DEPLOY_PATH=branches/$BRANCH_NAME" >> $GITHUB_ENV
+            echo "SOURCE_REF=$BRANCH_NAME ($SHORT_COMMIT_HASH)" >> $GITHUB_ENV
+          fi
+          echo "Deploying to: $DEPLOY_PATH"
+
+      - name: Checkout pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Copy files to target directory
+        run: |
+          # 创建目标目录
+          mkdir -p "gh-pages/$DEPLOY_PATH"
+          
+          # 复制当前分支/标签的文件到目标目录
+          # 使用 rsync 排除 .git 目录和其他不需要的文件
+          rsync -av --exclude='.git' --exclude='.github' \
+            ./ "gh-pages/$DEPLOY_PATH/"
+
+      - name: Record commit hash for current branch/tag
+        run: |
+          # 创建metadata目录
+          mkdir -p "gh-pages/.metadata"
+          
+          # 获取当前完整commit hash和short hash
+          FULL_COMMIT_HASH="${{ github.sha }}"
+          SHORT_COMMIT_HASH="${FULL_COMMIT_HASH:0:7}"
+          
+          # 获取提交信息和作者
+          COMMIT_MESSAGE="$(git log -1 --pretty=format:'%s')"
+          COMMIT_AUTHOR="$(git log -1 --pretty=format:'%an')"
+          COMMIT_DATE="$(git log -1 --pretty=format:'%cd')"
+          
+          # 保存metadata信息
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            METADATA_FILE="gh-pages/.metadata/versions/$TAG_NAME.json"
+            mkdir -p "gh-pages/.metadata/versions"
+          else
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            METADATA_FILE="gh-pages/.metadata/branches/$BRANCH_NAME.json"
+            mkdir -p "gh-pages/.metadata/branches"
+          fi
+          
+          # 生成metadata JSON文件
+          cat > "$METADATA_FILE" << EOF
+          {
+            "commitHash": "$FULL_COMMIT_HASH",
+            "shortCommitHash": "$SHORT_COMMIT_HASH",
+            "commitMessage": "$COMMIT_MESSAGE",
+            "commitAuthor": "$COMMIT_AUTHOR",
+            "commitDate": "$COMMIT_DATE",
+            "deployDate": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+
+      - name: Create or update navigation index
+        run: |
+          cd gh-pages
+          
+          # 获取分支列表及其commit hash信息
+          BRANCHES_WITH_HASH='[]'
+          if [ -d "branches" ]; then
+            BRANCHES_WITH_HASH=$(find branches -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | while read branch; do
+              # 尝试从metadata文件中读取commit hash和message
+              METADATA_FILE=".metadata/branches/$branch.json"
+              if [ -f "$METADATA_FILE" ]; then
+                SHORT_HASH=$(jq -r '.shortCommitHash' "$METADATA_FILE")
+                COMMIT_MSG=$(jq -r '.commitMessage' "$METADATA_FILE")
+              else
+                SHORT_HASH="(unknown)"
+                COMMIT_MSG="(unknown commit message)"
+              fi
+              echo "{\"name\": \"$branch\", \"hash\": \"$SHORT_HASH\", \"message\": \"$COMMIT_MSG\"}"
+            done | jq -s '.')
+          fi
+          
+          # 获取标签列表及其commit hash信息
+          TAGS_WITH_HASH='[]'
+          if [ -d "versions" ]; then
+            TAGS_WITH_HASH=$(find versions -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | while read tag; do
+              # 尝试从metadata文件中读取commit hash和message
+              METADATA_FILE=".metadata/versions/$tag.json"
+              if [ -f "$METADATA_FILE" ]; then
+                SHORT_HASH=$(jq -r '.shortCommitHash' "$METADATA_FILE")
+                COMMIT_MSG=$(jq -r '.commitMessage' "$METADATA_FILE")
+              else
+                SHORT_HASH="(unknown)"
+                COMMIT_MSG="(unknown commit message)"
+              fi
+              echo "{\"name\": \"$tag\", \"hash\": \"$SHORT_HASH\", \"message\": \"$COMMIT_MSG\"}"
+            done | jq -s '.')
+          fi
+          
+          # 生成导航页面
+          cat > index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>项目版本导航</title>
+              <style>
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                  h1 { text-align: center; }
+                  .section { margin: 20px 0; }
+                  .link-list { list-style-type: none; padding: 0; }
+                  .link-item { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+                  .link-item a { text-decoration: none; color: #0366d6; font-weight: bold; }
+                  .link-item a:hover { text-decoration: underline; }
+                  .version-meta { font-size: 12px; color: #666; margin-top: 5px; font-family: monospace; }
+                  .commit-message { font-size: 11px; color: #888; margin-top: 3px; font-style: italic; }
+              </style>
+          </head>
+          <body>
+              <h1>项目版本导航</h1>
+              
+              <div class="section">
+                  <h2>分支版本</h2>
+                  <ul class="link-list" id="branches-list">
+                  </ul>
+              </div>
+              
+              <div class="section">
+                  <h2>标签版本</h2>
+                  <ul class="link-list" id="tags-list">
+                  </ul>
+              </div>
+              
+              <script>
+                  // 动态加载分支和标签列表及其commit hash
+                  const branches = $BRANCHES_WITH_HASH;
+                  const tags = $TAGS_WITH_HASH;
+                  
+                  const branchesList = document.getElementById('branches-list');
+                  const tagsList = document.getElementById('tags-list');
+                  
+                  // 显示分支列表
+                  branches.forEach(item => {
+                      const li = document.createElement('li');
+                      li.className = 'link-item';
+                      li.innerHTML = '<a href="/html-website/branches/' + item.name + '/?commit=' + item.hash + '">' + item.name + '</a><div class="version-meta">' + item.hash + '</div><div class="commit-message">' + item.message + '</div>';
+                      branchesList.appendChild(li);
+                  });
+                  
+                  // 显示标签列表
+                  tags.forEach(item => {
+                      const li = document.createElement('li');
+                      li.className = 'link-item';
+                      li.innerHTML = '<a href="/versions/' + item.name + '/?commit=' + item.hash + '">' + item.name + '</a><div class="version-meta">' + item.hash + '</div><div class="commit-message">' + item.message + '</div>';
+                      tagsList.appendChild(li);
+                  });
+              </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          cd gh-pages
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Deploy ${{ env.SOURCE_REF }} to ${{ env.DEPLOY_PATH }}"
+          git push
