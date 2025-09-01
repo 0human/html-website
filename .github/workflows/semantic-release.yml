@@ -1,0 +1,77 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+  # 可选：允许手动触发工作流
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get App Installation Token
+        id: get_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要获取完整的历史记录以进行版本分析
+          token: ${{ steps.get_token.outputs.token }}
+
+      - name: Setup Git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@0human.noreply.github.com"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build project
+        run: pnpm run build
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 如果需要发布到 npm，取消下面的注释并添加相应的 secrets
+          # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
+
+      - name: Get Tag Name
+        id: tag
+        run: |
+          TAG=$(git describe --tags --always)
+          echo "value=$TAG" >> $GITHUB_OUTPUT
+          
+      - name: Create file
+        run: |
+          echo "TAG=${{ steps.tag.outputs.value }}" > tag.env
+          
+      - name: Upload Tag Name
+        uses: actions/upload-artifact@v4
+        with:
+          name: tag
+          path: tag.env
+          retention-days: 1

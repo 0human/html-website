@@ -1,6 +1,6 @@
 # HTML 功能页面集合
 
-这是一个用于管理和展示多个功能页面的HTML网站仓库。所有页面都可以通过`index.html`访问，每个功能页面可以根据issue使用腾讯元宝进行创建或者修改。
+这是一个用于管理和展示多个功能页面的HTML网站仓库。所有页面都可以通过[index.html](https://0human.github.io/html-website/index.html)访问，每个功能页面可以根据issue使用腾讯元宝进行创建或者修改。
 
 ## 项目结构
 
