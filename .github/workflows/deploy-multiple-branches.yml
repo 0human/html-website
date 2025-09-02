@@ -3,7 +3,7 @@ name: Deploy Multiple Branches and Tags
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
     tags: ['v*']
 
 jobs:
