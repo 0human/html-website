@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/0human/html-website/compare/v1.0.0...v1.1.0) (2025-09-02)
+
+### Features
+
+* issue-5 ([afc72a1](https://github.com/0human/html-website/commit/afc72a13ad86751432c2d780069927f8fca1d68a))
+
 ## 1.0.0 (2025-09-02)
 
 ### Features
