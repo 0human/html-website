@@ -48,7 +48,7 @@ jobs:
           
           # 复制当前分支/标签的文件到目标目录
           # 使用 rsync 排除 .git 目录和其他不需要的文件
-          rsync -av --exclude='.git' --exclude='.github' \
+          rsync -av --exclude='.git' --exclude='.github' --exclude='gh-pages' \
             ./ "gh-pages/$DEPLOY_PATH/"
 
       - name: Record commit hash for current branch/tag
