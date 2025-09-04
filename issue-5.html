@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>炫酷粒子互动</title>
+    <title>炫酷粒子互动 - 带拖尾效果</title>
     <style>
         * {
             margin: 0;
@@ -96,6 +96,24 @@
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+        
+        .feature-list {
+            text-align: left;
+            margin: 15px 0;
+            padding-left: 20px;
+        }
+        
+        .feature-list li {
+            margin: 8px 0;
+            position: relative;
+        }
+        
+        .feature-list li:before {
+            content: "★";
+            color: #4df9ff;
+            position: absolute;
+            left: -20px;
+        }
     </style>
 </head>
 <body>
@@ -105,9 +123,17 @@
         <h1>炫酷粒子世界</h1>
         <p>移动你的鼠标来与粒子互动！粒子会跟随你的光标移动并产生美丽的色彩轨迹。</p>
         
+        <ul class="feature-list">
+            <li>拖尾粒子效果 - 移动鼠标时产生粒子轨迹</li>
+            <li>三种色彩模式 - 彩虹色、蓝紫色、红黄色</li>
+            <li>粒子物理效果 - 逼真的运动轨迹和碰撞</li>
+            <li>响应式设计 - 适应各种屏幕尺寸</li>
+        </ul>
+        
         <div class="button-group">
             <button class="btn" id="colorBtn">切换色彩模式</button>
             <button class="btn" id="cursorBtn">显示鼠标指针</button>
+            <button class="btn" id="trailBtn">拖尾强度: 中</button>
         </div>
     </div>
     
@@ -118,6 +144,7 @@
         const ctx = canvas.getContext('2d');
         const colorBtn = document.getElementById('colorBtn');
         const cursorBtn = document.getElementById('cursorBtn');
+        const trailBtn = document.getElementById('trailBtn');
         
         // 设置canvas尺寸为窗口大小
         canvas.width = window.innerWidth;
@@ -125,8 +152,12 @@
         
         // 粒子数组
         let particles = [];
+        // 拖尾粒子数组
+        let trailParticles = [];
         // 颜色模式
         let colorMode = 0;
+        // 拖尾强度 (1-低, 2-中, 3-高)
+        let trailIntensity = 2;
         // 鼠标位置
         let mouse = {
             x: canvas.width / 2,
@@ -134,22 +165,19 @@
             visible: true
         };
         
+        // 鼠标移动历史记录
+        let mouseHistory = [];
+        const maxHistory = 5;
+        
         // 监听鼠标移动
         canvas.addEventListener('mousemove', (e) => {
             mouse.x = e.x;
             mouse.y = e.y;
             
-            // 画一个简单的鼠标指示器
-            if (mouse.visible) {
-                const indicatorSize = 10;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.beginPath();
-                ctx.arc(mouse.x, mouse.y, indicatorSize, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
+            // 记录鼠标位置历史
+            mouseHistory.push({x: e.x, y: e.y});
+            if (mouseHistory.length > maxHistory) {
+                mouseHistory.shift();
             }
         });
         
@@ -179,6 +207,13 @@
                 '隐藏鼠标指针' : '显示鼠标指针';
             document.body.style.cursor = mouse.visible ? 
                 'default' : 'none';
+        });
+        
+        // 拖尾强度按钮点击事件
+        trailBtn.addEventListener('click', () => {
+            trailIntensity = trailIntensity % 3 + 1;
+            const intensities = ['低', '中', '高'];
+            trailBtn.innerText = `拖尾强度: ${intensities[trailIntensity-1]}`;
         });
         
         // 粒子类
@@ -267,9 +302,50 @@
             }
         }
         
+        // 拖尾粒子类
+        class TrailParticle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = (Math.random() - 0.5) * 2;
+                this.speedY = (Math.random() - 0.5) * 2;
+                this.color = color || this.getRandomColor();
+                this.life = 100; // 粒子寿命
+            }
+            
+            getRandomColor() {
+                // 根据当前颜色模式返回随机颜色
+                if (colorMode === 0) {
+                    return `hsl(${Math.random() * 360}, 100%, 60%)`;
+                } else if (colorMode === 1) {
+                    return `hsl(${260 + Math.random() * 40}, 100%, 60%)`;
+                } else {
+                    return `hsl(${30 + Math.random() * 30}, 100%, 60%)`;
+                }
+            }
+            
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.size *= 0.95;
+                this.life -= 2;
+            }
+            
+            draw() {
+                ctx.globalAlpha = this.life / 100;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+        
         // 初始化粒子
         function init() {
             particles = [];
+            trailParticles = [];
             for (let i = 0; i < 100; i++) {
                 particles.push(new Particle());
             }
@@ -282,11 +358,37 @@
             });
         }
         
+        // 创建拖尾粒子
+        function createTrailParticles() {
+            if (mouseHistory.length < 2) return;
+            
+            // 根据拖尾强度创建不同数量的粒子
+            let count = 0;
+            switch(trailIntensity) {
+                case 1: count = 3; break;
+                case 2: count = 6; break;
+                case 3: count = 10; break;
+            }
+            
+            for (let i = 0; i < count; i++) {
+                const index = Math.floor(mouseHistory.length * Math.random());
+                const pos = mouseHistory[index];
+                const color = particles.length > 0 ? 
+                    particles[Math.floor(Math.random() * particles.length)].color : 
+                    null;
+                
+                trailParticles.push(new TrailParticle(pos.x, pos.y, color));
+            }
+        }
+        
         // 动画循环
         function animate() {
             // 创建半透明背景实现轨迹效果
             ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 创建拖尾粒子
+            createTrailParticles();
             
             // 更新和绘制所有粒子
             particles.forEach(particle => {
@@ -294,9 +396,33 @@
                 particle.draw();
             });
             
+            // 更新和绘制拖尾粒子
+            for (let i = 0; i < trailParticles.length; i++) {
+                trailParticles[i].update();
+                trailParticles[i].draw();
+                
+                // 移除死亡的粒子
+                if (trailParticles[i].life <= 0 || trailParticles[i].size <= 0.1) {
+                    trailParticles.splice(i, 1);
+                    i--;
+                }
+            }
+            
             // 如果粒子数量太少，添加新粒子
             if (particles.length < 100 && Math.random() < 0.1) {
                 particles.push(new Particle());
+            }
+            
+            // 绘制鼠标指示器（如果可见）
+            if (mouse.visible) {
+                const indicatorSize = 10;
+                ctx.beginPath();
+                ctx.arc(mouse.x, mouse.y, indicatorSize, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             }
             
             requestAnimationFrame(animate);
