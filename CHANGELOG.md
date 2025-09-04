@@ -1,3 +1,13 @@
+## [1.1.0](https://github.com/0human/html-website/compare/v1.0.0...v1.1.0) (2025-09-04)
+
+### Features
+
+* use action to deploy pages ([da8e1b8](https://github.com/0human/html-website/commit/da8e1b8b44fbe1c2356cf1da212c8a4db19a371d))
+
+### Bug Fixes
+
+* fix no cache with index.html and tag link ([e7566bb](https://github.com/0human/html-website/commit/e7566bb035c22b8c9804c18b37d1fedaf47246d4))
+
 ## 1.0.0 (2025-09-04)
 
 ### Features
