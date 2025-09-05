@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/0human/html-website/compare/v1.0.0...v1.1.0) (2025-09-05)
+
+### Features
+
+* add commit link ([7d050da](https://github.com/0human/html-website/commit/7d050da701c85f6fc0214a8c9c8c01df3d231fec))
+
 ## 1.0.0 (2025-09-05)
 
 ### Features
