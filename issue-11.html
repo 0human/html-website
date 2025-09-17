@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手势转像素艺术生成器</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        .content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            justify-content: center;
+        }
+        
+        .camera-section, .result-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            flex: 1;
+            min-width: 300px;
+            max-width: 500px;
+        }
+        
+        .section-title {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #fdbb2d;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #pixelCanvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        label {
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fdbb2d;
+            cursor: pointer;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #fdbb2d;
+            color: #1a2a6c;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:hover {
+            background: #ffcc44;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        #captureBtn {
+            background: #1a2a6c;
+            color: white;
+        }
+        
+        #captureBtn:hover {
+            background: #2a3a9c;
+        }
+        
+        .gesture-info {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #gestureName {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fdbb2d;
+            margin-top: 5px;
+        }
+        
+        .gesture-examples {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .example {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            width: 120px;
+        }
+        
+        .example img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 10px;
+            image-rendering: pixelated;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                flex-direction: column;
+            }
+            
+            .camera-section, .result-section {
+                max-width: 100%;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>手势转像素艺术生成器</h1>
+            <p class="subtitle">使用摄像头捕捉手势，实时转换为像素风格的艺术图片。支持多种手势识别，包括竖大拇指、食指、中指、剪刀手等。</p>
+        </header>
+        
+        <div class="content">
+            <div class="camera-section">
+                <h2 class="section-title">实时摄像头</h2>
+                <div class="video-container">
+                    <video id="video" autoplay playsinline></video>
+                </div>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="pixelSize">像素大小: <span id="pixelSizeValue">8</span>px</label>
+                        <input type="range" id="pixelSize" min="4" max="20" value="8">
+                    </div>
+                    
+                    <div class="buttons">
+                        <button id="startBtn">启动摄像头</button>
+                        <button id="captureBtn">捕捉手势</button>
+                    </div>
+                </div>
+                
+                <div class="gesture-info">
+                    <p>检测到的手势:</p>
+                    <p id="gestureName">无</p>
+                </div>
+            </div>
+            
+            <div class="result-section">
+                <h2 class="section-title">像素艺术结果</h2>
+                <div class="canvas-container">
+                    <canvas id="pixelCanvas"></canvas>
+                </div>
+                
+                <div class="buttons">
+                    <button id="downloadBtn">下载图片</button>
+                    <button id="clearBtn">清除结果</button>
+                </div>
+                
+                <div class="gesture-examples">
+                    <div class="example">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a2a6c'/%3E%3Crect x='10' y='10' width='12' height='16' fill='%23fdbb2d'/%3E%3Crect x='12' y='6' width='8' height='4' fill='%23fdbb2d'/%3E%3C/svg%3E" alt="Thumbs Up">
+                        <p>大拇指</p>
+                    </div>
+                    <div class="example">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a2a6c'/%3E%3Crect x='14' y='6' width='4' height='20' fill='%23fdbb2d'/%3E%3Crect x='8' y='18' width='16' height='8' fill='%23fdbb2d'/%3E%3C/svg%3E" alt="Pointing">
+                        <p>食指</p>
+                    </div>
+                    <div class="example">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a2a6c'/%3E%3Crect x='10' y='6' width='4' height='20' fill='%23fdbb2d'/%3E%3Crect x='18' y='6' width='4' height='20' fill='%23fdbb2d'/%3E%3Crect x='6' y='18' width='20' height='8' fill='%23fdbb2d'/%3E%3C/svg%3E" alt="Peace">
+                        <p>剪刀手</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>手势转像素艺术生成器 | 使用TensorFlow.js实现手势识别 | 2023</p>
+        </footer>
+    </div>
+
+    <script>
+        // DOM元素
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('pixelCanvas');
+        const startBtn = document.getElementById('startBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const pixelSize = document.getElementById('pixelSize');
+        const pixelSizeValue = document.getElementById('pixelSizeValue');
+        const gestureName = document.getElementById('gestureName');
+        
+        // 上下文
+        const ctx = canvas.getContext('2d');
+        
+        // 模型和状态
+        let model = null;
+        let stream = null;
+        let isCameraOn = false;
+        
+        // 初始化
+        async function init() {
+            try {
+                // 加载手势识别模型
+                model = await handpose.load();
+                console.log("手势识别模型已加载");
+                
+                // 设置初始像素大小
+                pixelSizeValue.textContent = pixelSize.value;
+                
+                // 事件监听
+                startBtn.addEventListener('click', toggleCamera);
+                captureBtn.addEventListener('click', captureGesture);
+                downloadBtn.addEventListener('click', downloadImage);
+                clearBtn.addEventListener('click', clearCanvas);
+                pixelSize.addEventListener('input', updatePixelSize);
+                
+                // 设置画布尺寸
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+                
+            } catch (error) {
+                console.error("初始化错误:", error);
+                alert("初始化失败: " + error.message);
+            }
+        }
+        
+        // 调整画布大小
+        function resizeCanvas() {
+            const container = document.querySelector('.canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            
+            // 初始绘制占位符
+            drawPlaceholder();
+        }
+        
+        // 绘制占位符
+        function drawPlaceholder() {
+            ctx.fillStyle = '#1a2a6c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#fdbb2d';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('等待捕捉手势...', canvas.width/2, canvas.height/2);
+        }
+        
+        // 更新像素大小显示
+        function updatePixelSize() {
+            pixelSizeValue.textContent = pixelSize.value;
+        }
+        
+        // 切换摄像头
+        async function toggleCamera() {
+            if (isCameraOn) {
+                // 关闭摄像头
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+                video.srcObject = null;
+                startBtn.textContent = '启动摄像头';
+                isCameraOn = false;
+            } else {
+                // 开启摄像头
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            width: { ideal: 640 }, 
+                            height: { ideal: 480 } 
+                        } 
+                    });
+                    video.srcObject = stream;
+                    startBtn.textContent = '关闭摄像头';
+                    isCameraOn = true;
+                    
+                    // 开始手势检测
+                    detectGesture();
+                } catch (error) {
+                    console.error("摄像头访问错误:", error);
+                    alert("无法访问摄像头: " + error.message);
+                }
+            }
+        }
+        
+        // 手势检测
+        async function detectGesture() {
+            if (!isCameraOn || !model) return;
+            
+            try {
+                // 检测手势
+                const predictions = await model.estimateHands(video);
+                
+                if (predictions.length > 0) {
+                    // 获取手势信息
+                    const gesture = identifyGesture(predictions[0].landmarks);
+                    gestureName.textContent = gesture;
+                } else {
+                    gestureName.textContent = "未检测到手势";
+                }
+                
+                // 继续检测
+                requestAnimationFrame(detectGesture);
+            } catch (error) {
+                console.error("手势检测错误:", error);
+                setTimeout(detectGesture, 1000);
+            }
+        }
+        
+        // 识别手势类型（简化版）
+        function identifyGesture(landmarks) {
+            // 简化版手势识别逻辑
+            // 实际应用中应使用更复杂的算法
+            
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const middleTip = landmarks[12];
+            const ringTip = landmarks[16];
+            const pinkyTip = landmarks[20];
+            const wrist = landmarks[0];
+            
+            // 计算手指是否伸直
+            const isThumbExtended = thumbTip[1] < wrist[1];
+            const isIndexExtended = indexTip[1] < middleTip[1];
+            const isMiddleExtended = middleTip[1] < ringTip[1];
+            const isRingExtended = ringTip[1] < pinkyTip[1];
+            const isPinkyExtended = pinkyTip[1] < wrist[1];
+            
+            // 手势判断
+            if (isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+                return "食指";
+            } else if (isThumbExtended && !isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+                return "大拇指";
+            } else if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+                return "剪刀手";
+            } else if (isMiddleExtended && !isIndexExtended && !isRingExtended && !isPinkyExtended) {
+                return "中指";
+            } else if (isIndexExtended && isMiddleExtended && isRingExtended && isPinkyExtended) {
+                return "手掌";
+            } else {
+                return "未知手势";
+            }
+        }
+        
+        // 捕捉手势并转换为像素艺术
+        function captureGesture() {
+            if (!isCameraOn) {
+                alert("请先启动摄像头");
+                return;
+            }
+            
+            // 设置画布尺寸与视频相同
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // 绘制视频帧到画布
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 应用像素化效果
+            pixelate();
+        }
+        
+        // 像素化处理
+        function pixelate() {
+            const size = parseInt(pixelSize.value) * 0.01;
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // 创建临时画布用于缩小图像
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 计算缩小后的尺寸
+            const scaledWidth = Math.max(1, Math.floor(width * size));
+            const scaledHeight = Math.max(1, Math.floor(height * size));
+            
+            // 设置临时画布尺寸
+            tempCanvas.width = scaledWidth;
+            tempCanvas.height = scaledHeight;
+            
+            // 缩小图像
+            tempCtx.drawImage(canvas, 0, 0, scaledWidth, scaledHeight);
+            
+            // 清除原始画布
+            ctx.clearRect(0, 0, width, height);
+            
+            // 放大图像回原始尺寸（像素化效果）
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tempCanvas, 0, 0, width, height);
+        }
+        
+        // 下载图片
+        function downloadImage() {
+            if (canvas.width === 0) {
+                alert("请先捕捉手势");
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = '手势像素艺术.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // 清除画布
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            resizeCanvas(); // 重置为占位符
+        }
+        
+        // 初始化应用
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
