@@ -1,3 +1,10 @@
+## [1.2.0](https://github.com/0human/html-website/compare/v1.1.0...v1.2.0) (2025-09-18)
+
+### Features
+
+* auto add feature cards ([fe23171](https://github.com/0human/html-website/commit/fe231713889c1727df418e715e7c874f9da46e4e))
+* 手势转像素艺术生成器 ([cfcda74](https://github.com/0human/html-website/commit/cfcda742f9c40cbb1156bc3ab0db9e3c9f80ce63))
+
 ## [1.1.0](https://github.com/0human/html-website/compare/v1.0.0...v1.1.0) (2025-09-05)
 
 ### Features
